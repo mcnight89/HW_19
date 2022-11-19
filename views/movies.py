@@ -1,47 +1,68 @@
-from flask import request
 from flask_restx import Resource, Namespace
+from flask import request
 
 from dao.model.movie import MovieSchema
 from implemented import movie_service
+from decorators import admin_required, auth_required
 
 movie_ns = Namespace('movies')
+
+movie_schema = MovieSchema()
+movies_schema = MovieSchema(many=True)
 
 
 @movie_ns.route('/')
 class MoviesView(Resource):
+    @auth_required
     def get(self):
-        director = request.args.get("director_id")
-        genre = request.args.get("genre_id")
-        year = request.args.get("year")
-        filters = {
-            "director_id": director,
-            "genre_id": genre,
-            "year": year,
-        }
-        all_movies = movie_service.get_all(filters)
-        res = MovieSchema(many=True).dump(all_movies)
-        return res, 200
+        try:
+            director = request.args.get('director_id')
+            genre = request.args.get('genre')
+            year = request.args.get('year')
+            filters = {
+                "director_id": director,
+                "genre_id": genre,
+                "year": year
+            }
+            movie = movie_service.get_all()
+            return movies_schema.dump(movie), 200
+        except Exception as e:
+            return 404
 
+    @admin_required
     def post(self):
-        req_json = request.json
-        movie = movie_service.create(req_json)
-        return "", 201, {"location": f"/movies/{movie.id}"}
+        try:
+            req_json = request.json
+            movie_service.create(req_json)
+            return "movie added", 201
+        except Exception as e:
+            return 404
 
 
-@movie_ns.route('/<int:bid>')
+@movie_ns.route('/<int:mid>')
 class MovieView(Resource):
-    def get(self, bid):
-        b = movie_service.get_one(bid)
-        sm_d = MovieSchema().dump(b)
-        return sm_d, 200
+    @auth_required
+    def get(self, mid: int):
+        try:
+            movie = movie_service.get_one(mid)
+            return movie_schema.dump(movie), 200
+        except Exception as e:
+            return "movie not found"
 
-    def put(self, bid):
-        req_json = request.json
-        if "id" not in req_json:
-            req_json["id"] = bid
-        movie_service.update(req_json)
-        return "", 204
+    @admin_required
+    def put(self, mid):
+        try:
+            req_json = request.json
+            req_json['id'] = mid
+            movie_service.update(req_json)
+            return "movies updated", 201
+        except Exception as e:
+            return "movie not updated", 404
 
-    def delete(self, bid):
-        movie_service.delete(bid)
-        return "", 204
+    @admin_required
+    def delete(self, mid):
+        try:
+            movie_service.delete(mid)
+            return "data deleted", 204
+        except Exception as e:
+            return "data not found", 404
